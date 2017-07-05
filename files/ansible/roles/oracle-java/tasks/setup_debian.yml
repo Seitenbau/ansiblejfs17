@@ -1,0 +1,30 @@
+---
+- name: add repo key
+  apt_key: keyserver=hkp://keyserver.ubuntu.com:80 id=EEA14886
+  become: yes
+
+- name: add repo
+  apt_repository: repo="deb http://ppa.launchpad.net/webupd8team/java/ubuntu trusty main"
+  become: yes
+
+- name: automatically select the Oracle License
+  shell: echo oracle-java{{ ojVersion }}-installer shared/accepted-oracle-license-v1-1 select true | debconf-set-selections
+  changed_when: false
+  become: yes
+
+- name: install java
+  apt: name=oracle-java{{ ojVersion }}-installer state=present update_cache=yes force=yes
+  become: yes
+
+- name: "install JCE for oracle-java{{ ojVersion}}"
+  copy: src=jce{{ ojVersion }}/{{ item }} dest=/usr/lib/jvm/java-{{ ojVersion }}-oracle/jre/lib/security/{{ item }}
+  become: yes
+  when: withJCE
+  with_items:
+    - local_policy.jar
+    - US_export_policy.jar
+
+- name: "make oracle-java{{ ojVersion }} default"
+  apt: name=oracle-java{{ ojVersion }}-set-default state=present
+  become: yes
+  when: isDefault

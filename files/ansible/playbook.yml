@@ -1,0 +1,44 @@
+---
+- hosts: db
+
+  become: yes # für notify restart mysql
+
+  roles:
+  - mysql
+
+  tasks:
+  - name: user db | ensure required database exists
+    mysql_db: name='todoservice' state=present  collation=utf8_bin
+
+  - name: user | Ensure that user with required privileges exists
+    mysql_user: name='todo' password='todo' priv='todoservice.*:ALL' host="%" state=present append_privs=yes
+
+- hosts: app
+  become: yes
+
+  roles:
+  - { role: oracle-java, ojVersion: 8, isDefault: true }
+
+  tasks:
+    - set_fact:
+        applicationUser: "todo"
+        targetAppFolder: "/opt/sb/todoservice"
+        sourcePkgFolder: "../"
+
+    - name: prepare | create group for new system user
+      group: name={{ applicationUser }}
+
+    - name: prepare | create system user for application
+      user: name={{ applicationUser }} group={{ applicationUser }} createhome=no
+
+    - name: prepare | create application folder
+      file: path={{ targetAppFolder }} state=directory owner={{ applicationUser }} group={{ applicationUser }} mode=0755
+
+    - name: install | copy jar to target application folder
+      copy: src={{ sourcePkgFolder }}/todoservice.jar dest={{ targetAppFolder }} owner={{ applicationUser }} group={{ applicationUser }} mode=0500
+
+    - name: install | softlink jar as init.d startup script
+      file: src={{ targetAppFolder }}/todoservice.jar dest=/etc/init.d/todoservice state=link
+
+    - name: configure | configure systemd and start application
+      service: name=todoservice state=started enabled=yes
